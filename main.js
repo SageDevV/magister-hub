@@ -2479,7 +2479,13 @@ window.loginWithGoogle = () => {
   const provider = new firebase.auth.GoogleAuthProvider();
   auth.signInWithPopup(provider).catch(error => {
     console.error("Erro ao fazer login:", error);
-    alert("Erro ao fazer login com Google.");
+    if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') return;
+    const messages = {
+      'auth/unauthorized-domain': 'Este domínio não está autorizado no Firebase Authentication. Adicione-o em Authentication > Settings > Authorized domains.',
+      'auth/popup-blocked': 'O navegador bloqueou a janela de login. Permita pop-ups para este site e tente novamente.',
+      'auth/network-request-failed': 'Falha de rede ao fazer login. Verifique sua conexão e tente novamente.'
+    };
+    alert(`${messages[error?.code] || 'Erro ao fazer login com Google.'}${error?.code ? ` (${error.code})` : ''}`);
   });
 };
 
