@@ -577,9 +577,10 @@ service cloud.firestore {
           || (isApprovedStudent()
             && get(/databases/$(database)/documents/activitySubmissions/$(submissionId)).data.userId == request.auth.uid);
         allow create, update: if isApprovedStudent() && validActivitySubmissionChunk(submissionId, chunkId);
-        allow delete: if isApprovedStudent()
-          && get(/databases/$(database)/documents/activitySubmissions/$(submissionId)).data.userId == request.auth.uid
-          && get(/databases/$(database)/documents/activitySubmissions/$(submissionId)).data.status == 'uploading';
+        allow delete: if isAdmin()
+          || (isApprovedStudent()
+            && get(/databases/$(database)/documents/activitySubmissions/$(submissionId)).data.userId == request.auth.uid
+            && get(/databases/$(database)/documents/activitySubmissions/$(submissionId)).data.status == 'uploading');
       }
     }
 

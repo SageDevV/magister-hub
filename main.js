@@ -46,7 +46,6 @@ import {
   validateZipFileDescriptor
 } from './src/services/examServices.js';
 import {
-  DEFAULT_ACADEMIC_CLASSES,
   getExamSubjectsForClass,
   getProfileClassId,
   getSubjectsForClass,
@@ -994,26 +993,41 @@ async function unarchiveActivityOnFreeTier(activityId) {
   return { ok: true };
 }
 
+async function deleteRefsInBatches(refs) {
+  const BATCH_LIMIT = 400;
+  for (let start = 0; start < refs.length; start += BATCH_LIMIT) {
+    const batch = db.batch();
+    refs.slice(start, start + BATCH_LIMIT).forEach(ref => batch.delete(ref));
+    await batch.commit();
+  }
+}
+
 async function deleteActivityPermanently(activityId) {
   if (!isAdmin()) throw new Error('Área exclusiva do professor.');
-  const activityRef = db.collection('activities').doc(String(activityId || ''));
-  
-  // Delete all submissions for this activity
-  const submissionsSnapshot = await db.collection('activitySubmissions')
-    .where('activityId', '==', String(activityId || ''))
-    .get();
-  
-  const batch = db.batch();
-  
-  // Add submissions to batch delete
+  const id = String(activityId || '');
+  if (!id) throw new Error('Atividade inválida.');
+  const activityRef = db.collection('activities').doc(id);
+  const resourceRef = db.collection('activityResources').doc(id);
+  const [submissionsSnapshot, resourceDoc] = await Promise.all([
+    db.collection('activitySubmissions').where('activityId', '==', id).get(),
+    resourceRef.get()
+  ]);
+
+  const refs = [];
   submissionsSnapshot.docs.forEach(doc => {
-    batch.delete(doc.ref);
+    const chunkCount = Number(doc.data().chunkCount || 0);
+    for (let index = 0; index < chunkCount; index++) refs.push(doc.ref.collection('chunks').doc(String(index)));
+    refs.push(doc.ref);
   });
-  
-  // Add activity to batch delete
-  batch.delete(activityRef);
-  
-  await batch.commit();
+  if (resourceDoc.exists) {
+    const chunkCount = Number(resourceDoc.data().chunkCount || 0);
+    for (let index = 0; index < chunkCount; index++) refs.push(resourceRef.collection('chunks').doc(String(index)));
+    refs.push(resourceRef);
+  }
+
+  // A atividade é removida por último para permitir nova tentativa se algo falhar.
+  await deleteRefsInBatches(refs);
+  await activityRef.delete();
   return { ok: true };
 }
 
@@ -2099,7 +2113,6 @@ const state = {
 auth.onAuthStateChanged(async (user) => {
   try {
     if (user) {
-      console.log("Usuário autenticado:", user.email);
       state.user = user;
       
       const loadSuccess = await loadProgressFromFirestore(user.uid);
@@ -2258,16 +2271,13 @@ function getUserProfilePayload() {
 
 async function loadProgressFromFirestore(uid) {
   try {
-    console.log("Carregando progresso do Firestore...");
     const doc = await db.collection('users').doc(uid).get();
     
     if (doc.exists) {
       const data = doc.data();
-      console.log("Dados carregados com sucesso:", data);
       state.userStats = normalizeStats(data);
       return true;
     } else {
-      console.log("Nenhum dado encontrado para este usuário. Iniciando novo perfil.");
       state.userStats = createDefaultStats();
       return true;
     }
@@ -2284,7 +2294,6 @@ async function saveProgressToFirestore() {
   try {
     const payload = getUserProfilePayload();
     await db.collection('users').doc(state.user.uid).set(payload, { merge: true });
-    console.log("Progresso salvo com sucesso.");
     return true;
   } catch (error) {
     console.error("Erro ao salvar no Firestore:", error);
