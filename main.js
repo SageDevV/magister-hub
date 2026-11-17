@@ -983,6 +983,29 @@ async function archiveActivityOnFreeTier(activityId) {
   return { ok: true };
 }
 
+async function deleteActivityPermanently(activityId) {
+  if (!isAdmin()) throw new Error('Área exclusiva do professor.');
+  const activityRef = db.collection('activities').doc(String(activityId || ''));
+  
+  // Delete all submissions for this activity
+  const submissionsSnapshot = await db.collection('activitySubmissions')
+    .where('activityId', '==', String(activityId || ''))
+    .get();
+  
+  const batch = db.batch();
+  
+  // Add submissions to batch delete
+  submissionsSnapshot.docs.forEach(doc => {
+    batch.delete(doc.ref);
+  });
+  
+  // Add activity to batch delete
+  batch.delete(activityRef);
+  
+  await batch.commit();
+  return { ok: true };
+}
+
 function updateActivityUploadStatus(activityId, message, progress = null, type = '') {
   state.activityUploads[activityId] = { message, progress, type };
   const status = document.getElementById(`activity-upload-status-${activityId}`);
@@ -3856,6 +3879,7 @@ function renderTeacherActivityActions(activity) {
         ? `<button type="button" class="deactivate-exam-btn" onclick="window.deactivateActivity('${activity.id}')">Desativar</button>`
         : `<button type="button" class="publish-exam-btn" onclick="window.activateActivity('${activity.id}')">Ativar</button>`}
       <button type="button" class="delete-exam-btn" onclick="window.archiveActivity('${activity.id}')">Arquivar</button>
+      <button type="button" class="delete-exam-btn danger-btn" onclick="window.deleteActivity('${activity.id}')">Excluir</button>
     </div>`;
 }
 
@@ -6559,6 +6583,20 @@ window.archiveActivity = async activityId => {
     await loadActivities();
   } catch (error) {
     state.activitiesMessage = `Erro: ${getFriendlyError(error, 'Não foi possível arquivar a atividade.')}`;
+  }
+  renderTeacherActivities();
+};
+
+window.deleteActivity = async activityId => {
+  if (!window.confirm('Excluir esta atividade permanentemente? Todas as entregas também serão removidas. Esta ação não pode ser desfeita.')) return;
+  if (!window.confirm('Tem certeza? Esta é uma ação irreversível.')) return;
+  state.activitiesMessage = '';
+  try {
+    await deleteActivityPermanently(activityId);
+    state.activitiesMessage = 'Atividade excluída permanentemente.';
+    await loadActivities();
+  } catch (error) {
+    state.activitiesMessage = `Erro: ${getFriendlyError(error, 'Não foi possível excluir a atividade.')}`;
   }
   renderTeacherActivities();
 };

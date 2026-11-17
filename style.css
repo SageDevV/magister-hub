@@ -1932,6 +1932,18 @@ h1 {
   background: rgba(239, 68, 68, 0.18);
 }
 
+.delete-exam-btn.danger-btn {
+  color: #ff6b6b;
+  border-color: rgba(239, 68, 68, 0.6);
+  background: rgba(239, 68, 68, 0.15);
+  font-weight: 900;
+}
+
+.delete-exam-btn.danger-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.8);
+}
+
 .correct-answer-field small {
   color: var(--text-muted);
   font-weight: 500;

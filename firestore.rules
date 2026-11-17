@@ -549,7 +549,7 @@ service cloud.firestore {
             || (!(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.studentProfile.keys().hasAny(['classId']))
               && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.studentProfile.className == resource.data.className)));
       allow create, update: if isAdmin();
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     match /activityResources/{activityId} {
@@ -570,7 +570,7 @@ service cloud.firestore {
         || (isApprovedStudent() && submissionId.matches('.*__' + request.auth.uid));
       allow list: if isAdmin();
       allow create, update: if isApprovedStudent() && validActivitySubmission(submissionId);
-      allow delete: if false;
+      allow delete: if isAdmin();
 
       match /chunks/{chunkId} {
         allow get, list: if isAdmin()
