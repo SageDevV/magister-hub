@@ -1963,6 +1963,7 @@ function createDefaultStats() {
 // --- Application State ---
 const state = {
   currentView: 'login',
+  authPending: false,
   currentTopic: null,
   currentDifficulty: 'bronze',
   currentQuestionIndex: 0,
@@ -2114,6 +2115,8 @@ auth.onAuthStateChanged(async (user) => {
   try {
     if (user) {
       state.user = user;
+      state.authPending = true;
+      renderLogin();
       
       const loadSuccess = await loadProgressFromFirestore(user.uid);
       
@@ -2123,10 +2126,12 @@ auth.onAuthStateChanged(async (user) => {
         await saveProgressToFirestore();
       }
       
-      if (isAdmin() || isStudentProfileApproved(state.userStats.studentProfile)) {
-        await loadLeaderboardFromFirestore();
-      }
-      await loadAcademicCatalog();
+      await Promise.all([
+        isAdmin() || isStudentProfileApproved(state.userStats.studentProfile)
+          ? loadLeaderboardFromFirestore()
+          : null,
+        loadAcademicCatalog()
+      ]);
       state.currentView = getAuthorizedViewFromHash();
       if (state.currentView === 'exam' && !isAdmin()) {
         state.examScreen = 'catalog';
@@ -2212,6 +2217,7 @@ auth.onAuthStateChanged(async (user) => {
   } catch (error) {
     console.error("Erro crítico no observer de auth:", error);
   } finally {
+    state.authPending = false;
     renderApp();
   }
 });
@@ -2485,9 +2491,14 @@ async function persistSpeedrunResult(result) {
 
 // --- Auth Actions ---
 window.loginWithGoogle = () => {
+  if (state.authPending) return;
+  state.authPending = true;
+  renderLogin();
   const provider = new firebase.auth.GoogleAuthProvider();
   auth.signInWithPopup(provider).catch(error => {
     console.error("Erro ao fazer login:", error);
+    state.authPending = false;
+    renderLogin();
     if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') return;
     const messages = {
       'auth/unauthorized-domain': 'Este domínio não está autorizado no Firebase Authentication. Adicione-o em Authentication > Settings > Authorized domains.',
@@ -2804,8 +2815,8 @@ function renderLogin() {
       <div class="login-card">
         <h2>Bem-vindo ao Magister Hub</h2>
         <p>Entre com sua conta Google para acessar seus módulos e ferramentas.</p>
-        <button class="next-btn" onclick="window.loginWithGoogle()">
-          Fazer Login com Google
+        <button class="next-btn" onclick="window.loginWithGoogle()" ${state.authPending ? 'disabled' : ''}>
+          ${state.authPending ? 'Entrando...' : 'Fazer Login com Google'}
         </button>
         <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted)">
           Plataforma protegida pelo Firebase.
