@@ -983,6 +983,17 @@ async function archiveActivityOnFreeTier(activityId) {
   return { ok: true };
 }
 
+async function unarchiveActivityOnFreeTier(activityId) {
+  if (!isAdmin()) throw new Error('Área exclusiva do professor.');
+  await db.collection('activities').doc(String(activityId || '')).update({
+    deleted: false,
+    active: false,
+    archivedAt: firebase.firestore.FieldValue.delete(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  return { ok: true };
+}
+
 async function deleteActivityPermanently(activityId) {
   if (!isAdmin()) throw new Error('Área exclusiva do professor.');
   const activityRef = db.collection('activities').doc(String(activityId || ''));
@@ -3870,7 +3881,12 @@ function renderTeacherActivityEditor(mainContent) {
 function renderTeacherActivityActions(activity) {
   const status = getActivityStatus(activity);
   if (status === ACTIVITY_STATUSES.ARCHIVED) {
-    return '<span class="activity-archived-label">Atividade arquivada · somente consulta</span>';
+    return `
+      <div class="activity-management-actions">
+        <span class="activity-archived-label">Atividade arquivada · somente consulta</span>
+        <button type="button" class="publish-exam-btn" onclick="window.unarchiveActivity('${activity.id}')">Desarquivar</button>
+        <button type="button" class="delete-exam-btn danger-btn" onclick="window.deleteActivity('${activity.id}')">Excluir</button>
+      </div>`;
   }
   return `
     <div class="activity-management-actions">
@@ -6583,6 +6599,19 @@ window.archiveActivity = async activityId => {
     await loadActivities();
   } catch (error) {
     state.activitiesMessage = `Erro: ${getFriendlyError(error, 'Não foi possível arquivar a atividade.')}`;
+  }
+  renderTeacherActivities();
+};
+
+window.unarchiveActivity = async activityId => {
+  if (!window.confirm('Desarquivar esta atividade? Ela voltará como desativada para você editar ou reativar.')) return;
+  state.activitiesMessage = '';
+  try {
+    await unarchiveActivityOnFreeTier(activityId);
+    state.activitiesMessage = 'Atividade desarquivada com sucesso. Você pode ativá-la quando desejar.';
+    await loadActivities();
+  } catch (error) {
+    state.activitiesMessage = `Erro: ${getFriendlyError(error, 'Não foi possível desarquivar a atividade.')}`;
   }
   renderTeacherActivities();
 };
